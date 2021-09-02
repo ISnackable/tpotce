@@ -21,8 +21,8 @@ myTPOTCOMPOSE="/opt/tpot/etc/tpot.yml"
 myLSB_STABLE_SUPPORTED="stretch buster"
 myLSB_TESTING_SUPPORTED="stable"
 myREMOTESITES="https://hub.docker.com https://github.com https://pypi.python.org https://debian.org https://listbot.sicherheitstacho.eu"
-myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release netselect-apt net-tools software-properties-common toilet"
-myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail netselect-apt net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
+myPREINSTALLPACKAGES="aria2 apache2-utils cracklib-runtime curl dialog figlet fuse grc libcrack2 libpq-dev lsb-release net-tools software-properties-common toilet"
+myINSTALLPACKAGES="aria2 apache2-utils apparmor apt-transport-https aufs-tools bash-completion build-essential ca-certificates cgroupfs-mount cockpit cockpit-docker console-setup console-setup-linux cracklib-runtime curl debconf-utils dialog dnsutils docker.io docker-compose ethtool fail2ban figlet genisoimage git glances grc haveged html2text htop iptables iw jq kbd libcrack2 libltdl7 libpam-google-authenticator man mosh multitail net-tools npm ntp openssh-server openssl pass pigz prips software-properties-common syslinux psmisc pv python3-pip toilet unattended-upgrades unzip vim wget wireless-tools wpasupplicant"
 myINFO="\
 ###########################################
 ### T-Pot Installer for Debian (Stable) ###
@@ -175,8 +175,8 @@ $myRANDOM_MINUTE $myDEL_HOUR * * *      root    curator --config /opt/tpot/etc/c
 # Uploaded binaries are not supposed to be downloaded
 */1 * * * *     root    mv --backup=numbered /data/dionaea/roots/ftp/* /data/dionaea/binaries/
 
-# Reboot every 12 hours
-27 */12 * * *      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
+# Daily reboot
+$myRANDOM_MINUTE $myRANDOM_HOUR * * 1-6      root    systemctl stop tpot && docker stop \$(docker ps -aq) || docker rm \$(docker ps -aq) || reboot
 
 # Check for updated packages every sunday, upgrade and reboot
 $myRANDOM_MINUTE $myRANDOM_HOUR * * 0     root    apt-fast autoclean -y && apt-fast autoremove -y && apt-fast update -y && apt-fast upgrade -y && sleep 10 && reboot
@@ -294,21 +294,6 @@ function fuCHECKNET {
 # Install T-Pot dependencies
 function fuGET_DEPS {
   export DEBIAN_FRONTEND=noninteractive
-  # Determine fastest mirror
-  echo
-  echo "### Determine fastest mirror for your location."
-  echo
-  netselect-apt -n -a amd64 stable && cp sources.list /etc/apt/
-  mySOURCESCHECK=$(cat /etc/apt/sources.list | grep -c stable)
-  if [ "$mySOURCESCHECK" == "0" ]
-    then
-      echo "### Automatic mirror selection failed, using main mirror."
-      # Point to Debian (stable)
-tee /etc/apt/sources.list <<EOF
-deb http://deb.debian.org/debian stable main contrib non-free
-deb-src http://deb.debian.org/debian stable main contrib non-free
-EOF
-  fi
   echo
   echo "### Getting update information."
   echo
@@ -708,7 +693,7 @@ hash -r
 if ! [ "$myTPOT_DEPLOYMENT_TYPE" == "iso" ];
   then
     fuBANNER "Cloning T-Pot"
-    git clone https://github.com/TheoKlein/tpotce /opt/tpot
+    git clone https://github.com/ISnackable/tpotce /opt/tpot
 fi
 
 # Let's create the T-Pot user
@@ -797,6 +782,23 @@ echo "$mySYSTEMDFIX" | tee /etc/systemd/network/99-default.link
 fuBANNER "Add cronjobs"
 echo "$myCRONJOBS" | tee -a /etc/crontab
 
+### For some honeypots to work we need to ensure ntp.service is not listening
+echo "### Ensure ntp.service is not listening to avoid potential port conflict with ddospot."
+myNTP_IF_DISABLE="interface ignore wildcard
+interface ignore 127.0.0.1
+interface ignore ::1"
+
+if [ "$(cat /etc/ntp.conf | grep "interface ignore wildcard" | wc -l)" != "1" ];
+  then
+    echo "### Found active ntp listeners and updating config."
+    echo "$myNTP_IF_DISABLE" | tee -a /etc/ntp.conf
+    echo "### Restarting ntp.service for changes to take effect."
+    systemctl stop ntp.service
+    systemctl start ntp.service
+  else
+    echo "### Found no active ntp listeners."
+fi
+
 # Let's create some files and folders
 fuBANNER "Files & folders"
 mkdir -vp /data/adbhoney/{downloads,log} \
@@ -804,13 +806,16 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/conpot/log \
          /data/citrixhoneypot/logs \
          /data/cowrie/{downloads,keys,misc,log,log/tty} \
+	 /data/ddospot/{bl,db,log} \
 	 /data/dicompot/{images,log} \
          /data/dionaea/{log,bistreams,binaries,rtp,roots,roots/ftp,roots/tftp,roots/www,roots/upnp} \
          /data/elasticpot/log \
          /data/elk/{data,log} \
+	 /data/endlessh/log \
          /data/fatt/log \
          /data/honeytrap/{log,attacks,downloads} \
          /data/glutton/log \
+	 /data/hellpot/log \
          /data/heralding/log \
          /data/honeypy/log \
          /data/honeysap/log \
@@ -821,6 +826,7 @@ mkdir -vp /data/adbhoney/{downloads,log} \
          /data/emobility/log \
          /data/ews/conf \
          /data/rdpy/log \
+	 /data/redishoneypot/log \
          /data/spiderfoot \
          /data/suricata/log \
          /data/tanner/{log,files} \
