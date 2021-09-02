@@ -184,4 +184,5 @@ processors:
         hostname: "${MY_HOSTNAME}"
 
 output.logstash:
+  enabled: true
   hosts: ["<YOUR_CENTRAL_LOGSTASH_IP>:64299"]
