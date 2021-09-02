@@ -1,5 +1,42 @@
 ![T-Pot](doc/tpotsocial.png)
 
+Guide:
+
+1. Install the Debain 10 (Stable) [ISO](https://www.debian.org/releases/buster/debian-installer/)
+2. Clone this repository 
+3. Follow the commands below
+
+On both server:
+
+```shell
+$ apt install nodejs npm git vim ethtool python3-venv python3-pip glances htop docker-compose curl cockpit cockpit-docker
+$ curl -sSL https://get.docker.com/ | sh
+$ usermod -aG docker root
+```
+
+On central collector server:
+
+```shell
+$ git clone https://github.com/ISnackable/tpotce
+$ cp tpotce/docker/elk/logstash/dist/logstash_with_filebeat.conf /opt/logstash.conf
+
+# Follow the official instruction to install as "COLLECTOR" type
+$ cd tpotce/iso/installer/
+$ ./install.sh --type=user
+```
+
+On each sensor server:
+
+```shell
+$ git clone https://github.com/ISnackable/tpotce
+$ cp tpotce/docker/elk/filebeat/fi* /opt/
+
+# Follow the official instruction to install as "NEXTGEN" type
+$ vim /opt/filebeat.yml # Modify your central collector server's IP
+$ cd tpotce/iso/installer/
+$ ./install.sh --type=user
+```
+
 T-Pot 20.06 runs on Debian (Stable), is based heavily on
 
 [docker](https://www.docker.com/), [docker-compose](https://docs.docker.com/compose/)
